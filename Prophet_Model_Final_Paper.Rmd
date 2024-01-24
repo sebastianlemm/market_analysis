@@ -1,0 +1,699 @@
+---
+title: "Final_Prophet_Code"
+output: word_document
+date: "2023-03-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+
+# Code for Prophet Model 
+
+
+```{r}
+library(prophet)
+library(dplyr)
+library(lubridate)
+
+# Load the tidyverse library for data manipulation
+library(tidyverse)
+
+# Read in the CSV file and select only the "Date" and "Close" columns
+df <- read.csv("C:/Users/sebsl/Downloads/SPY(1).csv") %>% 
+  select(Date, Close)
+
+# Rename the columns as requested
+names(df) <- c("ds", "y")
+
+# change 'Close' column to the log of the close price to more accurately capture trends
+# df$y <- log(df$y)
+
+# view the first 6 rows of the resulting dataframe
+head(df)
+
+```
+
+
+
+
+```{r}
+# Load the necessary libraries
+library(prophet)
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+
+# Read in the CSV file and select only the "Date" and "Close" columns
+df <- read.csv("C:/Users/sebsl/Downloads/SPY(1).csv") %>% 
+  select(Date, Close)
+
+# Rename the columns as requested
+names(df) <- c("ds", "y")
+
+# View the first 6 rows of the resulting dataframe
+head(df)
+
+# Create a Prophet model
+model <- prophet(df)
+
+# Make future dataframe for prediction (e.g., 365 days ahead)
+future <- make_future_dataframe(model, periods = 365)
+
+# Generate predictions
+forecast <- predict(model, future)
+
+# Plot the original data and the forecast
+plot(model, forecast)
+
+# Plot the forecast components
+prophet_plot_components(model, forecast)
+
+#interactive plot
+dyplot.prophet(model, forecast)
+
+# r squared
+
+df.cv <- cross_validation(model, initial = 700, period = 180, horizon = 365, units = 'days')
+
+df.p <- performance_metrics(df.cv)
+
+rsq <- df.p$rmse[1]^2 / var(df$y)
+rsq
+
+summary(df.p)
+
+
+```
+
+
+
+# The below code analyzes 
+
+
+```{r}
+
+# Load the necessary libraries
+library(prophet)
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+
+# Read in the CSV file and select only the "Date" and "Close" columns
+df <- read.csv("C:/Users/sebsl/Downloads/SPY(1).csv") %>% 
+  select(Date, Close)
+
+# Rename the columns as requested
+names(df) <- c("ds", "y")
+
+# View the first 6 rows of the resulting dataframe
+head(df)
+
+# Read in the interest rate data (assuming you have already downloaded it as a CSV)
+interest_rates <- read.csv("C:/Users/sebsl/Downloads/InterestRates.csv")
+
+# Rename the columns for the interest rate data
+names(interest_rates) <- c("ds", "interest_rate")
+
+# Merge the SPY data with the interest rate data
+df <- merge(df, interest_rates, by = "ds", all.x = TRUE)
+
+# Fill any missing interest rate values (e.g., using the previous value)
+df <- df %>%
+  tidyr::fill(interest_rate, .direction = "down") %>%
+  tidyr::fill(interest_rate, .direction = "up")
+
+# Create a Prophet model, specifying the additional regressor
+model <- prophet() %>%
+  add_regressor("interest_rate")
+
+
+# Fit the model to the data
+model <- fit.prophet(model, df)
+
+# Make future dataframe for prediction (e.g., 365 days ahead)
+future <- make_future_dataframe(model, periods = 365)
+
+# Merge the future dataframe with the interest rate data
+future <- merge(future, interest_rates, by = "ds", all.x = TRUE)
+
+# Fill any missing interest rate values in the future dataframe
+last_interest_rate <- tail(df$interest_rate, n = 1)
+future$interest_rate[is.na(future$interest_rate)] <- last_interest_rate
+
+# Generate predictions
+forecast <- predict(model, future)
+
+# Plot the original data and the forecast
+plot(model, forecast)
+
+# Plot the forecast components
+prophet_plot_components(model, forecast)
+
+#interactive plot
+dyplot.prophet(model, forecast)
+
+# r squared
+
+df.cv <- cross_validation(model, initial = 700, period = 180, horizon = 365, units = 'days')
+
+df.p <- performance_metrics(df.cv)
+
+rsq <- df.p$rmse[1]^2 / var(df$y)
+rsq
+
+summary(df.p)
+
+
+```
+
+
+
+
+# the model below is for logistic growth 
+
+```{r}
+
+# Load the necessary libraries
+library(prophet)
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+
+# Read in the CSV file and select only the "Date" and "Close" columns
+df <- read.csv("C:/Users/sebsl/Downloads/SPY(1).csv") %>% 
+  select(Date, Close)
+
+# Rename the columns as requested
+names(df) <- c("ds", "y")
+
+# Apply the log transformation to the y column
+df$y <- log(df$y)
+
+# View the first 6 rows of the resulting dataframe
+head(df)
+
+# Read in the interest rate data (assuming you have already downloaded it as a CSV)
+interest_rates <- read.csv("C:/Users/sebsl/Downloads/InterestRates.csv")
+
+# Rename the columns for the interest rate data
+names(interest_rates) <- c("ds", "interest_rate")
+
+# Merge the SPY data with the interest rate data
+df <- merge(df, interest_rates, by = "ds", all.x = TRUE)
+
+# Fill any missing interest rate values (e.g., using the previous value)
+df <- df %>%
+  tidyr::fill(interest_rate, .direction = "down") %>%
+  tidyr::fill(interest_rate, .direction = "up")
+
+# Set the carrying capacity (cap) and floor for the logistic growth
+df$cap <- max(df$y) * 1.5  # You can adjust the multiplier (1.5) as needed
+df$floor <- 0
+
+# Create a Prophet model with logistic growth, specifying the additional regressor
+model <- prophet(growth = "logistic") %>%
+  add_regressor("interest_rate")
+
+# Fit the model to the data
+model <- fit.prophet(model, df)
+
+# Make future dataframe for prediction (e.g., 365 days ahead)
+future <- make_future_dataframe(model, periods = 365)
+
+# Merge the future dataframe with the interest rate data
+future <- merge(future, interest_rates, by = "ds", all.x = TRUE)
+
+# Fill any missing interest rate values in the future dataframe
+last_interest_rate <- tail(df$interest_rate, n = 1)
+future$interest_rate[is.na(future$interest_rate)] <- last_interest_rate
+
+# Set the carrying capacity (cap) and floor for the future dataframe
+future$cap <- df$cap[1]
+future$floor <- 0
+
+# Generate predictions
+forecast <- predict(model, future)
+
+# Plot the original data and the forecast
+plot(model, forecast)
+
+# Plot the forecast components
+prophet_plot_components(model, forecast)
+
+#interactive plot
+dyplot.prophet(model, forecast)
+
+# r squared
+
+df.cv <- cross_validation(model, initial = 700, period = 180, horizon = 365, units = 'days')
+
+df.p <- performance_metrics(df.cv)
+
+rsq <- df.p$rmse[1]^2 / var(df$y)
+rsq
+
+summary(df.p)
+
+
+
+```
+
+
+
+
+# creating another visual 
+
+
+
+```{r}
+
+# Load the necessary libraries
+library(prophet)
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+
+# Read in the CSV file and select only the "Date" and "Close" columns
+df <- read.csv("C:/Users/sebsl/Downloads/SPY(1).csv") %>% 
+  select(Date, Close)
+
+# Rename the columns as requested
+names(df) <- c("ds", "y")
+
+# View the first 6 rows of the resulting dataframe
+head(df)
+
+# Read in the interest rate data (assuming you have already downloaded it as a CSV)
+interest_rates <- read.csv("C:/Users/sebsl/Downloads/InterestRates.csv")
+
+# Rename the columns for the interest rate data
+names(interest_rates) <- c("ds", "interest_rate")
+
+# Merge the SPY data with the interest rate data
+df <- merge(df, interest_rates, by = "ds", all.x = TRUE)
+
+# Fill any missing interest rate values (e.g., using the previous value)
+df <- df %>%
+  tidyr::fill(interest_rate, .direction = "down") %>%
+  tidyr::fill(interest_rate, .direction = "up")
+
+# Define the US holidays
+us_holidays <- data.frame(
+  holiday = 'US Holidays',
+  ds = as.Date(c(
+    '2010-01-01', # New Year's Day
+    '2010-01-18', # Martin Luther King Jr. Day
+    '2010-02-15', # Presidents' Day
+    '2010-05-31', # Memorial Day
+    '2010-07-04', # Independence Day
+    '2010-09-06', # Labor Day
+    '2010-10-11', # Columbus Day
+    '2010-11-11', # Veterans Day
+    '2010-11-25', # Thanksgiving
+    '2010-12-24', # Christmas Eve
+    '2010-12-25'  # Christmas
+  )),
+  lower_window = -1,
+  upper_window = 1
+)
+
+# Create an empty data frame to store the holidays for all years
+all_holidays <- data.frame()
+
+# Loop through each year from 1993 to 2023
+for (year in 1993:2023) {
+  # Generate the dates for the holidays for this year
+  holidays_for_year <- us_holidays
+  holidays_for_year$ds <- ymd(paste0(year, "-", month(holidays_for_year$ds), "-", day(holidays_for_year$ds)))
+  
+  # Add the holidays for this year to the data frame for all years
+  all_holidays <- rbind(all_holidays, holidays_for_year)
+}
+
+# Create a Prophet model, specifying the additional regressor and holidays
+model <- prophet(holidays = all_holidays) %>%
+  add_regressor("interest_rate")
+
+# Fit the model to the data
+model <- fit.prophet(model, df)
+
+# Make future dataframe for prediction (e.g., 365 days ahead)
+future <- make_future_dataframe(model, periods = 365)
+
+# Merge the future dataframe with the interest rate data
+future <- merge(future, interest_rates, by = "ds", all.x = TRUE)
+
+# Fill any missing interest rate values in the future dataframe
+last_interest_rate <- tail(df$interest_rate, n = 1)
+future$interest_rate[is.na(future$interest_rate)] <- last_interest_rate
+
+# Generate predictions
+forecast <- predict(model, future)
+
+# Plot the original data and the forecast
+plot(model, forecast)
+
+# Plot the forecast components
+prophet_plot_components(model, forecast)
+
+#interactive plot
+dyplot.prophet(model, forecast)
+
+# r squared
+
+df.cv <- cross_validation(model, initial = 700, period = 180, horizon = 365, units = 'days')
+
+df.p <- performance_metrics(df.cv)
+
+rsq <- df.p$rmse[1]^2 / var(df$y)
+rsq
+
+summary(df.p)
+
+```
+
+
+
+
+
+
+# shorter time frame, added interest rate as regressor 
+
+
+
+
+```{r}
+
+# Load the necessary libraries
+library(prophet)
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+
+# Read in the CSV file and select only the "Date" and "Close" columns
+df <- read.csv("C:/Users/sebsl/Downloads/SPY(2).csv") %>% 
+  select(Date, Close)
+
+# Rename the columns as requested
+names(df) <- c("ds", "y")
+
+# View the first 6 rows of the resulting dataframe
+head(df)
+
+# Read in the interest rate data (assuming you have already downloaded it as a CSV)
+interest_rates <- read.csv("C:/Users/sebsl/Downloads/InterestRates.csv")
+
+# Rename the columns for the interest rate data
+names(interest_rates) <- c("ds", "interest_rate")
+
+# Merge the SPY data with the interest rate data
+df <- merge(df, interest_rates, by = "ds", all.x = TRUE)
+
+# Fill any missing interest rate values (e.g., using the previous value)
+df <- df %>%
+  tidyr::fill(interest_rate, .direction = "down") %>%
+  tidyr::fill(interest_rate, .direction = "up")
+
+# Define the US holidays
+us_holidays <- data.frame(
+  holiday = 'US Holidays',
+  ds = as.Date(c(
+    '2010-01-01', # New Year's Day
+    '2010-01-18', # Martin Luther King Jr. Day
+    '2010-02-15', # Presidents' Day
+    '2010-05-31', # Memorial Day
+    '2010-07-04', # Independence Day
+    '2010-09-06', # Labor Day
+    '2010-10-11', # Columbus Day
+    '2010-11-11', # Veterans Day
+    '2010-11-25', # Thanksgiving
+    '2010-12-24', # Christmas Eve
+    '2010-12-25'  # Christmas
+  )),
+  lower_window = -1,
+  upper_window = 1
+)
+
+# Create an empty data frame to store the holidays for all years
+all_holidays <- data.frame()
+
+# Loop through each year from 1993 to 2023
+for (year in 1993:2023) {
+  # Generate the dates for the holidays for this year
+  holidays_for_year <- us_holidays
+  holidays_for_year$ds <- ymd(paste0(year, "-", month(holidays_for_year$ds), "-", day(holidays_for_year$ds)))
+  
+  # Add the holidays for this year to the data frame for all years
+  all_holidays <- rbind(all_holidays, holidays_for_year)
+}
+
+# Create a Prophet model, specifying the additional regressor and holidays
+model <- prophet(holidays = all_holidays) %>%
+  add_regressor("interest_rate")
+
+# Fit the model to the data
+model <- fit.prophet(model, df)
+
+# Make future dataframe for prediction (e.g., 365 days ahead)
+future <- make_future_dataframe(model, periods = 365)
+
+# Merge the future dataframe with the interest rate data
+future <- merge(future, interest_rates, by = "ds", all.x = TRUE)
+
+# Fill any missing interest rate values in the future dataframe
+last_interest_rate <- tail(df$interest_rate, n = 1)
+future$interest_rate[is.na(future$interest_rate)] <- last_interest_rate
+
+# Generate predictions
+forecast <- predict(model, future)
+
+# Plot the original data and the forecast
+plot(model, forecast)
+
+# Plot the forecast components
+prophet_plot_components(model, forecast)
+
+#interactive plot
+dyplot.prophet(model, forecast)
+
+# r squared
+
+df.cv <- cross_validation(model, initial = 700, period = 180, horizon = 365, units = 'days')
+
+df.p <- performance_metrics(df.cv)
+
+rsq <- df.p$rmse[1]^2 / var(df$y)
+rsq
+
+summary(df.p)
+
+```
+
+
+
+
+
+
+
+# remove interest rate 
+
+```{r}
+
+# Load the necessary libraries
+library(prophet)
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+
+# Read in the CSV file and select only the "Date" and "Close" columns
+df <- read.csv("C:/Users/sebsl/Downloads/SPY(2).csv") %>% 
+  select(Date, Close)
+
+# Rename the columns as requested
+names(df) <- c("ds", "y")
+
+
+
+
+# Define the US holidays
+us_holidays <- data.frame(
+  holiday = 'US Holidays',
+  ds = as.Date(c(
+    '2010-01-01', # New Year's Day
+    '2010-01-18', # Martin Luther King Jr. Day
+    '2010-02-15', # Presidents' Day
+    '2010-05-31', # Memorial Day
+    '2010-07-04', # Independence Day
+    '2010-09-06', # Labor Day
+    '2010-10-11', # Columbus Day
+    '2010-11-11', # Veterans Day
+    '2010-11-25', # Thanksgiving
+    '2010-12-24', # Christmas Eve
+    '2010-12-25'  # Christmas
+  )),
+  lower_window = -1,
+  upper_window = 1
+)
+
+# Create an empty data frame to store the holidays for all years
+all_holidays <- data.frame()
+
+# Loop through each year from 1993 to 2023
+for (year in 1993:2023) {
+  # Generate the dates for the holidays for this year
+  holidays_for_year <- us_holidays
+  holidays_for_year$ds <- ymd(paste0(year, "-", month(holidays_for_year$ds), "-", day(holidays_for_year$ds)))
+  
+  # Add the holidays for this year to the data frame for all years
+  all_holidays <- rbind(all_holidays, holidays_for_year)
+}
+
+# Create a Prophet model, specifying the additional regressor and holidays
+model <- prophet(holidays = all_holidays) 
+
+# Fit the model to the data
+model <- fit.prophet(model, df)
+
+# Make future dataframe for prediction (e.g., 365 days ahead)
+future <- make_future_dataframe(model, periods = 365)
+
+
+# Generate predictions
+forecast <- predict(model, future)
+
+# Plot the original data and the forecast
+plot(model, forecast)
+
+# Plot the forecast components
+prophet_plot_components(model, forecast)
+
+#interactive plot
+dyplot.prophet(model, forecast)
+
+# r squared
+
+df.cv <- cross_validation(model, initial = 700, period = 180, horizon = 365, units = 'days')
+
+df.p <- performance_metrics(df.cv)
+
+rsq <- df.p$rmse[1]^2 / var(df$y)
+rsq
+
+summary(df.p)
+
+```
+
+
+
+# remove interest rate and only model from data going back to Jan. 2021
+
+```{r}
+
+# Load the necessary libraries
+library(prophet)
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+
+# Read in the CSV file and select only the "Date" and "Close" columns
+df <- read.csv("C:/Users/sebsl/Downloads/SPY(3).csv") %>% 
+  select(Date, Close)
+
+# Rename the columns as requested
+names(df) <- c("ds", "y")
+
+
+
+
+# Define the US holidays
+us_holidays <- data.frame(
+  holiday = 'US Holidays',
+  ds = as.Date(c(
+    '2010-01-01', # New Year's Day
+    '2010-01-18', # Martin Luther King Jr. Day
+    '2010-02-15', # Presidents' Day
+    '2010-05-31', # Memorial Day
+    '2010-07-04', # Independence Day
+    '2010-09-06', # Labor Day
+    '2010-10-11', # Columbus Day
+    '2010-11-11', # Veterans Day
+    '2010-11-25', # Thanksgiving
+    '2010-12-24', # Christmas Eve
+    '2010-12-25'  # Christmas
+  )),
+  lower_window = -1,
+  upper_window = 1
+)
+
+# Create an empty data frame to store the holidays for all years
+all_holidays <- data.frame()
+
+# Loop through each year from 1993 to 2023
+for (year in 1993:2023) {
+  # Generate the dates for the holidays for this year
+  holidays_for_year <- us_holidays
+  holidays_for_year$ds <- ymd(paste0(year, "-", month(holidays_for_year$ds), "-", day(holidays_for_year$ds)))
+  
+  # Add the holidays for this year to the data frame for all years
+  all_holidays <- rbind(all_holidays, holidays_for_year)
+}
+
+# Create a Prophet model, specifying the additional regressor and holidays
+model <- prophet(holidays = all_holidays) 
+
+# Fit the model to the data
+model <- fit.prophet(model, df)
+
+# Make future dataframe for prediction (e.g., 365 days ahead)
+future <- make_future_dataframe(model, periods = 365)
+
+
+# Generate predictions
+forecast <- predict(model, future)
+
+# Plot the original data and the forecast
+plot(model, forecast)
+
+# Plot the forecast components
+prophet_plot_components(model, forecast)
+
+#interactive plot
+dyplot.prophet(model, forecast)
+
+# r squared
+
+df.cv <- cross_validation(model, initial = 30, period = 60, horizon = 365, units = 'days')
+
+df.p <- performance_metrics(df.cv)
+
+rsq <- df.p$rmse[1]^2 / var(df$y)
+rsq
+
+summary(df.p)
+
+```
+
